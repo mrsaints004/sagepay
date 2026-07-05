@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
@@ -22,6 +22,12 @@ export function ChatContainer({ prefillPrompt, onPrefillUsed }: ChatContainerPro
     cancelTransaction,
   } = useChat();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [inputValue, setInputValue] = useState("");
+  const [consumedPrefill, setConsumedPrefill] = useState<string | undefined>(undefined);
+
+  // Derive input value from prefill without an effect
+  // When prefillPrompt changes and hasn't been consumed, apply it
+  const activePrefill = prefillPrompt && prefillPrompt !== consumedPrefill ? prefillPrompt : null;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -29,15 +35,41 @@ export function ChatContainer({ prefillPrompt, onPrefillUsed }: ChatContainerPro
     }
   }, [messages]);
 
-  useEffect(() => {
-    if (prefillPrompt) onPrefillUsed?.();
-  }, [prefillPrompt, onPrefillUsed]);
+  const handleSend = (message: string) => {
+    sendMessage(message);
+    setInputValue("");
+  };
+
+  const handleInputChange = (val: string) => {
+    setInputValue(val);
+  };
+
+  // Apply prefill on first render of chat tab with a prefill
+  const displayValue = activePrefill ?? inputValue;
+
+  const handleSendWithPrefill = (message: string) => {
+    if (activePrefill) {
+      setConsumedPrefill(prefillPrompt);
+      onPrefillUsed?.();
+    }
+    handleSend(message);
+  };
+
+  const handleChangeWithPrefill = (val: string) => {
+    if (activePrefill) {
+      setConsumedPrefill(prefillPrompt);
+      onPrefillUsed?.();
+    }
+    handleInputChange(val);
+  };
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {messages.length === 0 ? (
-          <SuggestedPrompts onSelect={sendMessage} />
+          <SuggestedPrompts onSelect={(prompt) => {
+            handleSend(prompt);
+          }} />
         ) : (
           <AnimatePresence>
             {messages.map((msg) => (
@@ -77,9 +109,10 @@ export function ChatContainer({ prefillPrompt, onPrefillUsed }: ChatContainerPro
       </div>
 
       <ChatInput
-        onSend={sendMessage}
+        value={displayValue}
+        onChange={handleChangeWithPrefill}
+        onSend={handleSendWithPrefill}
         isProcessing={isProcessing}
-        initialValue={prefillPrompt}
       />
     </div>
   );

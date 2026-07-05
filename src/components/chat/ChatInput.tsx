@@ -1,30 +1,25 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useRef } from "react";
 import { ArrowUp } from "lucide-react";
 
 interface ChatInputProps {
+  value: string;
+  onChange: (value: string) => void;
   onSend: (message: string) => void;
   isProcessing: boolean;
-  initialValue?: string;
 }
 
-export function ChatInput({ onSend, isProcessing, initialValue = "" }: ChatInputProps) {
-  const [value, setValue] = useState(initialValue);
+export function ChatInput({ value, onChange, onSend, isProcessing }: ChatInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (value.trim() && !isProcessing) {
       onSend(value.trim());
-      setValue("");
+      onChange("");
     }
   };
-
-  if (initialValue && value !== initialValue) {
-    setValue(initialValue);
-    setTimeout(() => inputRef.current?.focus(), 0);
-  }
 
   return (
     <form
@@ -35,7 +30,7 @@ export function ChatInput({ onSend, isProcessing, initialValue = "" }: ChatInput
         ref={inputRef}
         type="text"
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => onChange(e.target.value)}
         placeholder="Send a message..."
         disabled={isProcessing}
         className="flex-1 h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-[14px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-300 focus:ring-2 focus:ring-slate-100 transition-all disabled:opacity-40"

@@ -76,7 +76,7 @@ declare module "@particle-network/universal-account-sdk" {
     ownerAddress: string;
     smartAccountAddress?: string;
     useEIP7702?: boolean;
-    options?: any;
+    options?: Record<string, unknown>;
   }
 
   export interface ITradeConfig {
@@ -128,6 +128,18 @@ declare module "@particle-network/universal-account-sdk" {
     eip7702Delegated?: boolean;
   }
 
+  export interface ITokenChange {
+    token: IToken;
+    amount: string;
+    amountInUSD: string;
+  }
+
+  export interface IFeeQuote {
+    token: IToken;
+    fee: string;
+    feeInUSD: string;
+  }
+
   export interface ITransaction {
     type: string;
     mode: string;
@@ -137,9 +149,9 @@ declare module "@particle-network/universal-account-sdk" {
     userOps: IUserOpWithChain[];
     rootHash: string;
     totalDepositTokenAmountInUSD: string;
-    tokenChanges: any;
-    feeQuotes: any[];
-    data: any[];
+    tokenChanges: ITokenChange[];
+    feeQuotes: IFeeQuote[];
+    data: Record<string, unknown>[];
   }
 
   export interface EIP7702Authorization {
@@ -147,15 +159,24 @@ declare module "@particle-network/universal-account-sdk" {
     signature: string;
   }
 
+  export interface ISendTransactionResult {
+    transactionId: string;
+  }
+
+  export interface ITransactionsResult {
+    transactions?: Record<string, unknown>[];
+    data?: Record<string, unknown>[];
+  }
+
   export class UniversalAccount {
     constructor(config: IUniversalAccountConfig);
     getPrimaryAssets(): Promise<IAssetsResponse>;
     createBuyTransaction(payload: IBuyTransaction, tradeConfig?: ITradeConfig): Promise<ITransaction>;
     createTransferTransaction(payload: ITransferTransaction): Promise<ITransaction>;
-    sendTransaction(transaction: ITransaction, signature: string, authorizations?: EIP7702Authorization[]): Promise<any>;
-    getTransaction(transactionId: string): Promise<any>;
-    getTransactions(page?: number, limit?: number, tag?: string): Promise<any>;
+    sendTransaction(transaction: ITransaction, signature: string, authorizations?: EIP7702Authorization[]): Promise<ISendTransactionResult>;
+    getTransaction(transactionId: string): Promise<Record<string, unknown>>;
+    getTransactions(page?: number, limit?: number, tag?: string): Promise<ITransactionsResult | Record<string, unknown>[]>;
     getSmartAccountOptions(): Promise<ISmartAccountOptions>;
-    getEIP7702Auth(chainIds: number[]): Promise<any>;
+    getEIP7702Auth(chainIds: number[]): Promise<Record<number, { delegated: boolean }> | null>;
   }
 }

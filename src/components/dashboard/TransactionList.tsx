@@ -22,7 +22,18 @@ const typeConfig = {
   swap: { icon: Repeat, prefix: "", label: "Swapped", color: "text-slate-900" },
 };
 
-function classifyTx(tx: any, ownerAddress: string): TxRecord {
+interface RawTransaction {
+  sender?: string;
+  receiver?: string;
+  mode?: string;
+  totalDepositTokenAmountInUSD?: string;
+  tag?: string;
+  createdAt?: string;
+  transactionId?: string;
+  id?: string;
+}
+
+function classifyTx(tx: RawTransaction, ownerAddress: string): TxRecord {
   const sender = (tx.sender ?? "").toLowerCase();
   const receiver = (tx.receiver ?? "").toLowerCase();
   const owner = ownerAddress.toLowerCase();
@@ -72,10 +83,11 @@ export function TransactionList({ onTryFirstPayment }: TransactionListProps) {
       try {
         const ua = getUA(user.address!);
         const result = await ua.getTransactions(1, 10);
-        const items = Array.isArray(result) ? result : result?.transactions ?? result?.data ?? [];
+        const raw = result as RawTransaction[] | { transactions?: RawTransaction[]; data?: RawTransaction[] };
+        const items: RawTransaction[] = Array.isArray(raw) ? raw : (raw?.transactions ?? raw?.data ?? []);
 
         if (!cancelled) {
-          setTxs(items.map((tx: any) => classifyTx(tx, user.address!)));
+          setTxs(items.map((tx) => classifyTx(tx, user.address!)));
         }
       } catch {
         if (!cancelled) {

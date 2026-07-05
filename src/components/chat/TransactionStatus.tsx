@@ -9,6 +9,20 @@ interface TransactionStatusProps {
   status: TxStatus;
 }
 
+const EXPLORER_URLS: Record<string, string> = {
+  "Arbitrum Sepolia": "https://sepolia.arbiscan.io",
+  "Ethereum Sepolia": "https://sepolia.etherscan.io",
+  "Base Sepolia": "https://sepolia.basescan.org",
+  "Arbitrum One": "https://arbiscan.io",
+  Ethereum: "https://etherscan.io",
+  Base: "https://basescan.org",
+};
+
+function getExplorerUrl(chain?: string): string {
+  if (!chain) return "https://sepolia.arbiscan.io";
+  return EXPLORER_URLS[chain] ?? "https://sepolia.arbiscan.io";
+}
+
 export function TransactionStatus({ status }: TransactionStatusProps) {
   return (
     <motion.div
@@ -53,7 +67,7 @@ export function TransactionStatus({ status }: TransactionStatusProps) {
         status.sourceChains.length > 0 &&
         status.settlementChain && (
           <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-            {status.sourceChains.map((chain, i) => (
+            {status.sourceChains.map((chain) => (
               <span
                 key={chain}
                 className="text-[11px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-medium"
@@ -70,7 +84,7 @@ export function TransactionStatus({ status }: TransactionStatusProps) {
 
       {status.txHash && (
         <a
-          href={`https://sepolia.arbiscan.io/tx/${status.txHash}`}
+          href={`${getExplorerUrl(status.settlementChain ?? status.chain)}/tx/${status.txHash}`}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-1 mt-2 text-[12px] text-slate-400 hover:text-slate-600 transition-colors"

@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Link from "next/link";
 import { Check, ExternalLink } from "lucide-react";
 import { ChainBadge } from "@/components/shared/ChainBadge";
 import { formatUSD } from "@/lib/utils";
@@ -12,7 +13,18 @@ interface PaymentSuccessProps {
   chain: string | null;
 }
 
+const EXPLORER_URLS: Record<string, string> = {
+  "Arbitrum Sepolia": "https://sepolia.arbiscan.io",
+  "Ethereum Sepolia": "https://sepolia.etherscan.io",
+  "Base Sepolia": "https://sepolia.basescan.org",
+  "Arbitrum One": "https://arbiscan.io",
+  Ethereum: "https://etherscan.io",
+  Base: "https://basescan.org",
+};
+
 export function PaymentSuccess({ amount, token, txHash, chain }: PaymentSuccessProps) {
+  const explorerBase = EXPLORER_URLS[chain ?? ""] ?? "https://sepolia.arbiscan.io";
+
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <div className="px-5 h-14 flex items-center border-b border-slate-100">
@@ -49,7 +61,7 @@ export function PaymentSuccess({ amount, token, txHash, chain }: PaymentSuccessP
 
           {txHash && txHash !== "no-op" && (
             <a
-              href={`https://sepolia.arbiscan.io/tx/${txHash}`}
+              href={`${explorerBase}/tx/${txHash}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors"
@@ -60,12 +72,12 @@ export function PaymentSuccess({ amount, token, txHash, chain }: PaymentSuccessP
           )}
 
           <div className="mt-8">
-            <a
+            <Link
               href="/"
               className="inline-flex h-10 px-6 items-center rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 transition-colors"
             >
               Go to SagePay
-            </a>
+            </Link>
           </div>
         </motion.div>
       </div>

@@ -1,29 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 
 export default function CallbackPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const handledRef = useRef(false);
 
   useEffect(() => {
-    handleCallback();
-  }, []);
+    if (handledRef.current) return;
+    handledRef.current = true;
 
-  async function handleCallback() {
-    try {
-      const { getMagic } = await import("@/lib/magic");
-      const magic = getMagic();
-      await (magic.oauth2 as any).getRedirectResult();
-      router.push("/dashboard");
-    } catch (err) {
-      console.error("OAuth callback error:", err);
-      setError("Login failed. Please try again.");
-      setTimeout(() => router.push("/"), 3000);
-    }
-  }
+    (async () => {
+      try {
+        const { getMagic } = await import("@/lib/magic");
+        const magic = getMagic();
+        await magic.oauth2.getRedirectResult();
+        router.push("/dashboard");
+      } catch (err) {
+        console.error("OAuth callback error:", err);
+        setError("Login failed. Please try again.");
+        setTimeout(() => router.push("/"), 3000);
+      }
+    })();
+  }); // no deps — runs once via ref guard
 
   if (error) {
     return (

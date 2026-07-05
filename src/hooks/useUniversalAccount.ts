@@ -8,7 +8,6 @@ import { getMagicProvider, signAuthorization } from "@/lib/eip7702";
 import type {
   IAsset,
   ITransaction,
-  IUserOpWithChain,
 } from "@particle-network/universal-account-sdk";
 
 const CHAIN_NAMES: Record<number, string> = {
@@ -50,16 +49,17 @@ function mapAssets(sdkAssets: IAsset[]): Asset[] {
   return result.sort((a, b) => b.balanceUSD - a.balanceUSD);
 }
 
-async function signUserOps(
-  userOps: IUserOpWithChain[]
+async function signTransaction(
+  transaction: ITransaction
 ): Promise<{ signature: string; authorizations: { userOpHash: string; signature: string }[] }> {
   const provider = getMagicProvider();
   const authorizations: { userOpHash: string; signature: string }[] = [];
+  const { userOps } = transaction;
 
-  const rootHash = userOps[0]?.userOpHash;
+  // Sign the transaction rootHash (per Particle SDK docs)
   const signature = (await provider.request({
     method: "personal_sign",
-    params: [rootHash, userOps[0]?.userOp?.sender],
+    params: [transaction.rootHash, userOps[0]?.userOp?.sender],
   })) as string;
 
   for (const op of userOps) {
@@ -71,7 +71,7 @@ async function signUserOps(
         });
         authorizations.push({
           userOpHash: op.userOpHash,
-          signature: typeof authResult === "string" ? authResult : (authResult as any)?.signature ?? signature,
+          signature: typeof authResult === "string" ? authResult : (authResult as { signature?: string })?.signature ?? signature,
         });
       } catch {
         const authSig = (await provider.request({
@@ -109,11 +109,11 @@ export function useUniversalAccount() {
     if (!user.address) return;
     try {
       const ua = getUA(user.address);
-      const authResult = await (ua as any).getEIP7702Auth?.(SUPPORTED_CHAINS);
+      const authResult = await ua.getEIP7702Auth(SUPPORTED_CHAINS) as Record<number, { delegated: boolean }> | null;
       if (authResult) {
         const chains: Record<number, boolean> = {};
         for (const chainId of SUPPORTED_CHAINS) {
-          chains[chainId] = authResult?.[chainId]?.delegated ?? false;
+          chains[chainId] = authResult[chainId]?.delegated ?? false;
         }
         const isDelegated = Object.values(chains).some(Boolean);
         setDelegationStatus({ isDelegated, chains });
@@ -190,15 +190,15 @@ export function useUniversalAccount() {
 
       // Extract chain routing info from userOps
       const sourceChains = [...new Set(
-        transaction.userOps.map(op => CHAIN_NAMES[(op as any).chainId] ?? "Unknown")
+        transaction.userOps.map(op => CHAIN_NAMES[op.chainId] ?? "Unknown")
       )];
       const settlementChain = CHAIN_NAMES[chainId] ?? "Unknown";
 
-      const { signature, authorizations } = await signUserOps(transaction.userOps);
+      const { signature, authorizations } = await signTransaction(transaction);
       const result = await ua.sendTransaction(transaction, signature, authorizations);
 
       return {
-        txId: result?.transactionId ?? transaction.transactionId,
+        txId: result.transactionId || transaction.transactionId,
         sourceChains,
         settlementChain,
       };
@@ -225,14 +225,14 @@ export function useUniversalAccount() {
       });
 
       const sourceChains = [...new Set(
-        transaction.userOps.map(op => CHAIN_NAMES[(op as any).chainId] ?? "Unknown")
+        transaction.userOps.map(op => CHAIN_NAMES[op.chainId] ?? "Unknown")
       )];
 
-      const { signature, authorizations } = await signUserOps(transaction.userOps);
+      const { signature, authorizations } = await signTransaction(transaction);
       const result = await ua.sendTransaction(transaction, signature, authorizations);
 
       return {
-        txId: result?.transactionId ?? transaction.transactionId,
+        txId: result.transactionId || transaction.transactionId,
         sourceChains,
         settlementChain: CHAIN_NAMES[target.chainId] ?? "Unknown",
       };
@@ -288,12 +288,12 @@ export function useUniversalAccount() {
       amountInUSD: otherChainValue.toFixed(2),
     });
 
-    const { signature, authorizations } = await signUserOps(transaction.userOps);
+    const { signature, authorizations } = await signTransaction(transaction);
     const result = await ua.sendTransaction(transaction, signature, authorizations);
 
     return {
       chain: bestName,
-      txId: result?.transactionId ?? transaction.transactionId,
+      txId: result.transactionId || transaction.transactionId,
     };
   }, [user.address]);
 

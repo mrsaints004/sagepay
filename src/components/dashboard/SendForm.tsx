@@ -8,7 +8,7 @@ import type { Asset } from "@/types";
 interface SendFormProps {
   open: boolean;
   onClose: () => void;
-  onSend: (to: string, amount: number, token: string) => Promise<any>;
+  onSend: (to: string, amount: number, token: string) => Promise<void>;
   assets: Asset[];
 }
 

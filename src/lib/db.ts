@@ -1,16 +1,23 @@
 import type { PaymentLink } from "@/types";
 import { nanoid } from "nanoid";
 
-let kv: any = null;
+interface KVStore {
+  set(key: string, value: string): Promise<void>;
+  get(key: string): Promise<string | null>;
+  zadd(key: string, entry: { score: number; member: string }): Promise<void>;
+  zrange(key: string, start: number, end: number, opts?: { rev: boolean }): Promise<string[]>;
+}
 
-async function getKV() {
+let kv: KVStore | null = null;
+
+async function getKV(): Promise<KVStore | null> {
   if (kv) return kv;
   if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
     return null;
   }
   try {
     const mod = await import("@vercel/kv");
-    kv = mod.kv;
+    kv = mod.kv as unknown as KVStore;
     return kv;
   } catch {
     return null;
