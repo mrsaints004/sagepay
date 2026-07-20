@@ -4,14 +4,14 @@ import { motion } from "framer-motion";
 import { ArrowUpRight, ArrowDownLeft, Repeat, Link2 } from "lucide-react";
 
 interface QuickActionsProps {
-  onAction: (prompt: string) => void;
+  onAction: (action: string) => void;
 }
 
 const actions = [
-  { icon: ArrowUpRight, label: "Send", prompt: "__send_dialog__" },
-  { icon: ArrowDownLeft, label: "Balance", prompt: "What's my balance?" },
-  { icon: Repeat, label: "Swap", prompt: "Swap 50 USDC to ETH" },
-  { icon: Link2, label: "Request", prompt: "Request $25 for dinner" },
+  { icon: ArrowUpRight, label: "Send", action: "__send_dialog__" },
+  { icon: ArrowDownLeft, label: "Balance", action: "__refresh_balance__" },
+  { icon: Repeat, label: "Swap", action: "__swap_dialog__" },
+  { icon: Link2, label: "Request", action: "__request_dialog__" },
 ];
 
 export function QuickActions({ onAction }: QuickActionsProps) {
@@ -23,7 +23,7 @@ export function QuickActions({ onAction }: QuickActionsProps) {
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 + i * 0.04, duration: 0.25 }}
-          onClick={() => onAction(action.prompt)}
+          onClick={() => onAction(action.action)}
           className="flex flex-col items-center gap-2 py-4 rounded-2xl bg-white border border-slate-100 hover:border-slate-200 hover:shadow-sm transition-all active:scale-[0.97]"
         >
           <div className="w-10 h-10 rounded-full flex items-center justify-center bg-slate-900 text-white">

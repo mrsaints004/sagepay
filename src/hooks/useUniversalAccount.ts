@@ -100,29 +100,22 @@ export function useUniversalAccount() {
 
   const checkDelegation = useCallback(async () => {
     if (!user.address) return;
-    try {
-      const ua = getUA(user.address);
-      const authResult = await ua.getEIP7702Auth(SUPPORTED_CHAINS) as Record<number, { delegated: boolean }> | null;
-      if (authResult) {
-        const chains: Record<number, boolean> = {};
-        for (const chainId of SUPPORTED_CHAINS) {
-          chains[chainId] = authResult[chainId]?.delegated ?? false;
-        }
-        const isDelegated = Object.values(chains).some(Boolean);
-        setDelegationStatus({ isDelegated, chains });
-      } else {
-        // If getEIP7702Auth is not available, assume delegated since useEIP7702 is enabled
-        const chains: Record<number, boolean> = {};
-        for (const chainId of SUPPORTED_CHAINS) {
-          chains[chainId] = true;
-        }
-        setDelegationStatus({ isDelegated: true, chains });
+    const ua = getUA(user.address);
+    const chains: Record<number, boolean> = {};
+
+    // Check each chain individually — some chains may not support EIP-7702
+    for (const chainId of SUPPORTED_CHAINS) {
+      try {
+        const authResult = await ua.getEIP7702Auth([chainId]) as Record<number, { delegated: boolean }> | null;
+        chains[chainId] = authResult?.[chainId]?.delegated ?? false;
+      } catch {
+        // Chain doesn't support EIP-7702 or check failed — mark as unsupported
+        chains[chainId] = false;
       }
-    } catch (err) {
-      console.warn("EIP-7702 delegation check failed:", err);
-      // Don't assume delegation status on error — leave as unknown/false
-      // so users can retry the upgrade if needed
     }
+
+    const isDelegated = Object.values(chains).some(Boolean);
+    setDelegationStatus({ isDelegated, chains });
   }, [user.address]);
 
   const fetchBalance = useCallback(async (): Promise<UnifiedBalance> => {

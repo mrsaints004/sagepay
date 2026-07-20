@@ -11,6 +11,8 @@ import { AccountStatus } from "@/components/dashboard/AccountStatus";
 import { AssetList } from "@/components/dashboard/AssetList";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { SendForm } from "@/components/dashboard/SendForm";
+import { SwapForm } from "@/components/dashboard/SwapForm";
+import { RequestForm } from "@/components/dashboard/RequestForm";
 import { TransactionList } from "@/components/dashboard/TransactionList";
 import { LinkList } from "@/components/dashboard/LinkList";
 import { ChatContainer } from "@/components/chat/ChatContainer";
@@ -21,12 +23,14 @@ type Tab = "home" | "chat" | "links";
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { balance, isLoading, fetchBalance, delegationStatus, checkDelegation, sendTransaction } =
+  const { balance, isLoading, fetchBalance, delegationStatus, checkDelegation, sendTransaction, swapTokens } =
     useUniversalAccount();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [chatPrefill, setChatPrefill] = useState("");
   const [showSendForm, setShowSendForm] = useState(false);
+  const [showSwapForm, setShowSwapForm] = useState(false);
+  const [showRequestForm, setShowRequestForm] = useState(false);
 
   useEffect(() => {
     if (!user.isLoading && !user.isLoggedIn) {
@@ -45,11 +49,22 @@ export default function DashboardPage() {
   if (!user.isLoggedIn) return null;
 
   const handleQuickAction = (action: string) => {
-    if (action === "__send_dialog__") {
-      setShowSendForm(true);
-    } else {
-      setChatPrefill(action);
-      setActiveTab("chat");
+    switch (action) {
+      case "__send_dialog__":
+        setShowSendForm(true);
+        break;
+      case "__swap_dialog__":
+        setShowSwapForm(true);
+        break;
+      case "__request_dialog__":
+        setShowRequestForm(true);
+        break;
+      case "__refresh_balance__":
+        fetchBalance();
+        break;
+      default:
+        setChatPrefill(action);
+        setActiveTab("chat");
     }
   };
 
@@ -81,8 +96,7 @@ export default function DashboardPage() {
               <QuickActions onAction={handleQuickAction} />
               <AssetList assets={balance.assets} isLoading={isLoading} />
               <TransactionList onTryFirstPayment={() => {
-                setChatPrefill("Send 1 USDC to 0x...");
-                setActiveTab("chat");
+                setShowSendForm(true);
               }} />
               <div className="h-2" />
             </motion.div>
@@ -148,6 +162,21 @@ export default function DashboardPage() {
         }}
         assets={balance.assets}
       />
+
+      <SwapForm
+        open={showSwapForm}
+        onClose={() => setShowSwapForm(false)}
+        onSwap={async (amount, fromToken, toToken) => {
+          await swapTokens(amount, fromToken, toToken);
+          fetchBalance();
+        }}
+        assets={balance.assets}
+      />
+
+      <RequestForm
+        open={showRequestForm}
+        onClose={() => setShowRequestForm(false)}
+      />
     </div>
   );
 }
@@ -166,6 +195,7 @@ function TabButton({
   return (
     <button
       onClick={onClick}
+      aria-label={label}
       className={`flex-1 flex flex-col items-center gap-1 py-2.5 transition-colors relative ${
         active ? "text-slate-900" : "text-slate-400"
       }`}

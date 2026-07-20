@@ -25,7 +25,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
             : "bg-slate-100 text-slate-800 rounded-bl-md"
         }`}
       >
-        <p className="text-[14px] leading-relaxed whitespace-pre-wrap">{message.content}</p>
+        <p className="text-[14px] leading-relaxed whitespace-pre-wrap break-words overflow-hidden">{message.content}</p>
         {message.txStatus && <TransactionStatus status={message.txStatus} />}
       </div>
     </motion.div>
