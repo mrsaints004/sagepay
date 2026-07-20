@@ -7,9 +7,9 @@ const prompts = [
   { text: "What's my balance?", icon: Wallet },
   { text: "Send 100 USDC to 0x...", icon: ArrowUpRight },
   { text: "Swap 50 USDC to ETH", icon: Repeat },
-  { text: "Pay Netflix", icon: CreditCard },
+  { text: "Request $25 for dinner", icon: CreditCard },
   { text: "Move funds to cheapest chain", icon: Zap },
-  { text: "Show cross-chain assets", icon: Layers },
+  { text: "Consolidate my assets", icon: Layers },
 ];
 
 interface SuggestedPromptsProps {

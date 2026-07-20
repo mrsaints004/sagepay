@@ -9,9 +9,9 @@ interface QuickActionsProps {
 
 const actions = [
   { icon: ArrowUpRight, label: "Send", prompt: "__send_dialog__" },
-  { icon: ArrowDownLeft, label: "Receive", prompt: "What's my balance?" },
-  { icon: Repeat, label: "Swap", prompt: "Swap " },
-  { icon: Link2, label: "Request", prompt: "Request " },
+  { icon: ArrowDownLeft, label: "Balance", prompt: "What's my balance?" },
+  { icon: Repeat, label: "Swap", prompt: "Swap 50 USDC to ETH" },
+  { icon: Link2, label: "Request", prompt: "Request $25 for dinner" },
 ];
 
 export function QuickActions({ onAction }: QuickActionsProps) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ArrowUpRight, Loader2 } from "lucide-react";
 import type { Asset } from "@/types";
@@ -19,6 +19,17 @@ export function SendForm({ open, onClose, onSend, assets }: SendFormProps) {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+
+  // Reset form state when opened
+  useEffect(() => {
+    if (open) {
+      setTo("");
+      setAmount("");
+      setToken("USDC");
+      setError("");
+      setSuccess(false);
+    }
+  }, [open]);
 
   const tokens = [...new Set(assets.map((a) => a.symbol))];
   if (!tokens.includes("USDC")) tokens.unshift("USDC");
@@ -77,6 +88,7 @@ export function SendForm({ open, onClose, onSend, assets }: SendFormProps) {
               <h3 className="text-[16px] font-semibold text-slate-900">Send</h3>
               <button
                 onClick={onClose}
+                aria-label="Close send form"
                 className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-50"
               >
                 <X className="w-4 h-4" />

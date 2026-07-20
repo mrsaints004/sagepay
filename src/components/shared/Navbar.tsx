@@ -9,11 +9,15 @@ export function Navbar({ isDelegated }: { isDelegated?: boolean }) {
   const { user, logout } = useAuth();
   const [copied, setCopied] = useState(false);
 
-  const copyAddress = () => {
+  const copyAddress = async () => {
     if (user.address) {
-      navigator.clipboard.writeText(user.address);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      try {
+        await navigator.clipboard.writeText(user.address);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        // Clipboard API not available (e.g. iframe, permissions)
+      }
     }
   };
 
@@ -27,6 +31,7 @@ export function Navbar({ isDelegated }: { isDelegated?: boolean }) {
         {user.address && (
           <button
             onClick={copyAddress}
+            aria-label="Copy wallet address"
             className="flex items-center gap-1.5 h-8 px-3 rounded-full bg-slate-50 border border-slate-200 text-[12px] font-mono text-slate-500 hover:border-slate-300 transition-colors"
           >
             {isDelegated ? (
@@ -44,6 +49,7 @@ export function Navbar({ isDelegated }: { isDelegated?: boolean }) {
         )}
         <button
           onClick={logout}
+          aria-label="Log out"
           className="flex items-center justify-center w-8 h-8 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors"
         >
           <LogOut className="w-4 h-4" />

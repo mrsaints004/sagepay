@@ -48,8 +48,8 @@ NEXT_PUBLIC_PARTICLE_PROJECT_ID=...
 NEXT_PUBLIC_PARTICLE_CLIENT_KEY=...
 NEXT_PUBLIC_PARTICLE_APP_UUID=...
 
-# Optional — OpenAI for smarter intent parsing (falls back to local regex)
-OPENAI_API_KEY=sk-...
+# Optional — Groq for smarter intent parsing (falls back to local regex)
+GROQ_API_KEY=gsk_...
 ```
 
 ## Tech Stack
@@ -58,10 +58,12 @@ OPENAI_API_KEY=sk-...
 - **React 19** — Client components with hooks
 - **Particle Network UA SDK** — Cross-chain account abstraction (EIP-7702)
 - **Magic.link** — Email + Google OAuth authentication, wallet creation
-- **OpenAI GPT-4o-mini** — Natural language intent parsing
+- **Groq (Llama 3.1 8B)** — Natural language intent parsing
+- **Drizzle ORM + Vercel Postgres** — Payment links & transaction history
+- **Sentry** — Error monitoring & observability
 - **Tailwind CSS 4** — Styling
 - **Framer Motion** — Animations
-- **nanoid** — Payment link ID generation
+- **Vitest** — Unit testing (34 tests)
 
 ## Supported Chains (Testnet)
 
@@ -130,7 +132,7 @@ src/
     particle.ts               # Particle UA SDK init
     magic.ts                  # Magic SDK init
     eip7702.ts                # Authorization signing
-    db.ts                     # In-memory payment link store
+    db.ts                     # Payment link CRUD (Drizzle ORM / Postgres)
     chains.ts                 # Chain configs
     tokens.ts                 # Token address mappings
   context/
@@ -143,10 +145,13 @@ src/
 ## Scripts
 
 ```bash
-npm run dev      # Start dev server (Turbopack)
-npm run build    # Production build
-npm run start    # Start production server
-npm run lint     # Run ESLint
+npm run dev          # Start dev server (Turbopack)
+npm run build        # Production build
+npm run start        # Start production server
+npm run lint         # Run ESLint
+npm test             # Run tests (Vitest)
+npm run db:generate  # Generate database migrations
+npm run db:migrate   # Apply database migrations
 ```
 
 ## License

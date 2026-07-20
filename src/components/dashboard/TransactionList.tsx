@@ -81,18 +81,56 @@ export function TransactionList({ onTryFirstPayment }: TransactionListProps) {
 
     async function load() {
       try {
-        const ua = getUA(user.address!);
-        const result = await ua.getTransactions(1, 10);
-        const raw = result as RawTransaction[] | { transactions?: RawTransaction[]; data?: RawTransaction[] };
-        const items: RawTransaction[] = Array.isArray(raw) ? raw : (raw?.transactions ?? raw?.data ?? []);
+        // Fetch from both DB and Particle SDK in parallel
+        const [dbResult, sdkResult] = await Promise.allSettled([
+          fetch(`/api/transactions?address=${user.address}&limit=10`).then((r) =>
+            r.ok ? r.json() : { items: [] }
+          ),
+          (async () => {
+            const ua = getUA(user.address!);
+            const result = await ua.getTransactions(1, 10);
+            const raw = result as RawTransaction[] | { transactions?: RawTransaction[]; data?: RawTransaction[] };
+            return Array.isArray(raw) ? raw : (raw?.transactions ?? raw?.data ?? []);
+          })(),
+        ]);
 
-        if (!cancelled) {
-          setTxs(items.map((tx) => classifyTx(tx, user.address!)));
+        if (cancelled) return;
+
+        // DB transactions
+        const dbTxs: TxRecord[] = [];
+        if (dbResult.status === "fulfilled" && dbResult.value?.items) {
+          for (const row of dbResult.value.items) {
+            const elapsed = Date.now() - new Date(row.createdAt).getTime();
+            let timestamp: string;
+            if (elapsed < 3600_000) timestamp = `${Math.floor(elapsed / 60_000)}m ago`;
+            else if (elapsed < 86_400_000) timestamp = `${Math.floor(elapsed / 3_600_000)}h ago`;
+            else timestamp = `${Math.floor(elapsed / 86_400_000)}d ago`;
+
+            dbTxs.push({
+              id: row.particleTxId ?? row.id,
+              type: row.type === "swap" || row.type === "move" ? "swap" : row.type === "receive" ? "receive" : "send",
+              amount: row.amountUsd ? parseFloat(row.amountUsd).toFixed(2) : "0.00",
+              token: row.token ?? "USD",
+              to: row.toAddress ? `${row.toAddress.slice(0, 6)}...${row.toAddress.slice(-4)}` : undefined,
+              timestamp,
+            });
+          }
         }
+
+        // SDK transactions
+        const sdkTxs: TxRecord[] = [];
+        if (sdkResult.status === "fulfilled") {
+          for (const tx of sdkResult.value) {
+            sdkTxs.push(classifyTx(tx, user.address!));
+          }
+        }
+
+        // Merge and deduplicate (prefer DB records)
+        const seenIds = new Set(dbTxs.map((t) => t.id));
+        const merged = [...dbTxs, ...sdkTxs.filter((t) => !seenIds.has(t.id))];
+        setTxs(merged.slice(0, 20));
       } catch {
-        if (!cancelled) {
-          setTxs([]);
-        }
+        if (!cancelled) setTxs([]);
       } finally {
         if (!cancelled) setIsLoading(false);
       }

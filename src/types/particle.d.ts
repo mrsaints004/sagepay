@@ -168,6 +168,10 @@ declare module "@particle-network/universal-account-sdk" {
     data?: Record<string, unknown>[];
   }
 
+  export const UNIVERSAL_ACCOUNT_VERSION: string;
+
+  export const UNIVERSALX_RPC_URL: string;
+
   export class UniversalAccount {
     constructor(config: IUniversalAccountConfig);
     getPrimaryAssets(): Promise<IAssetsResponse>;

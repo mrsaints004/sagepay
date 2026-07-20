@@ -68,16 +68,30 @@ export function parseIntentLocally(message: string): ParsedIntent {
   }
 
   // Request payment
-  const requestMatch = lower.match(
-    /request\s+\$?([\d.]+)\s*(\w+)?\s*(?:from\s+(\w+))?\s*(?:for\s+(.+))?$/
+  // Try "request $25 for dinner" / "request 25 USDC from Alice for dinner"
+  const requestMatchToken = lower.match(
+    /request\s+\$?([\d.]+)\s+(usdc|usdt|eth|ether)\s*(?:from\s+(\w+))?\s*(?:for\s+(.+))?$/i
   );
-  if (requestMatch) {
+  if (requestMatchToken) {
     return {
       type: "REQUEST",
-      amount: parseFloat(requestMatch[1]),
-      token: requestMatch[2]?.toUpperCase() || "USDC",
-      recipientName: requestMatch[3],
-      memo: requestMatch[4]?.trim(),
+      amount: parseFloat(requestMatchToken[1]),
+      token: requestMatchToken[2].toUpperCase(),
+      recipientName: requestMatchToken[3],
+      memo: requestMatchToken[4]?.trim(),
+      raw: message,
+    };
+  }
+  const requestMatchSimple = lower.match(
+    /request\s+\$?([\d.]+)\s*(?:from\s+(\w+))?\s*(?:for\s+(.+))?$/
+  );
+  if (requestMatchSimple) {
+    return {
+      type: "REQUEST",
+      amount: parseFloat(requestMatchSimple[1]),
+      token: "USDC",
+      recipientName: requestMatchSimple[2],
+      memo: requestMatchSimple[3]?.trim(),
       raw: message,
     };
   }

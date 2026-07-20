@@ -1,22 +1,49 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import type { ChatMessage, ParsedIntent } from "@/types";
 import { generateId, formatUSD } from "@/lib/utils";
 import { parseIntentLocally } from "@/lib/intent-parser";
 import { useUniversalAccount } from "./useUniversalAccount";
+import { useTransactionPoller } from "./useTransactionPoller";
 import { useAuth } from "@/context/AuthContext";
+
+async function recordTransaction(data: {
+  userAddress: string;
+  type: string;
+  amount?: number;
+  token?: string;
+  toAddress?: string;
+  toToken?: string;
+  sourceChains?: string[];
+  settlementChain?: string;
+  particleTxId?: string;
+  linkId?: string;
+}) {
+  try {
+    await fetch("/api/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...data,
+        amountUsd: data.amount?.toString(),
+        amount: data.amount?.toString(),
+      }),
+    });
+  } catch (err) {
+    // Non-critical: don't block UX if recording fails
+    console.warn("Failed to record transaction:", err);
+  }
+}
 
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [pendingConfirmation, setPendingConfirmation] = useState<ParsedIntent | null>(null);
-  const { balance, fetchBalance, sendTransaction, swapTokens, moveToLowestFee } =
+  const { fetchBalance, sendTransaction, swapTokens, moveToLowestFee } =
     useUniversalAccount();
+  const { poll } = useTransactionPoller();
   const { user } = useAuth();
-
-  const balanceRef = useRef(balance);
-  balanceRef.current = balance;
 
   const addMessage = useCallback((msg: Omit<ChatMessage, "id" | "timestamp">) => {
     const newMsg: ChatMessage = {
@@ -27,6 +54,50 @@ export function useChat() {
     setMessages((prev) => [...prev, newMsg]);
     return newMsg;
   }, []);
+
+  // Poll for on-chain confirmation in the background
+  const pollConfirmation = useCallback(
+    (txId: string, messageId: string) => {
+      poll(txId).then((result) => {
+        if (result.status === "confirmed") {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === messageId && m.txStatus?.state !== "failed"
+                ? { ...m, txStatus: { ...m.txStatus!, state: "confirmed" } }
+                : m
+            )
+          );
+          fetchBalance();
+        } else if (result.status === "failed") {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === messageId
+                ? {
+                    ...m,
+                    content: "Transaction failed on-chain. Please try again.",
+                    txStatus: { ...m.txStatus!, state: "failed", error: "Transaction failed on-chain" },
+                  }
+                : m
+            )
+          );
+        } else if (result.status === "timeout") {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === messageId
+                ? {
+                    ...m,
+                    content: "Transaction confirmation timed out. It may still complete — check your balance.",
+                    txStatus: { ...m.txStatus!, state: "failed", error: "Confirmation timed out" },
+                  }
+                : m
+            )
+          );
+          fetchBalance();
+        }
+      });
+    },
+    [poll, fetchBalance]
+  );
 
   const parseIntent = useCallback(async (message: string): Promise<ParsedIntent> => {
     try {
@@ -48,8 +119,7 @@ export function useChat() {
     async (intent: ParsedIntent) => {
       switch (intent.type) {
         case "BALANCE": {
-          await fetchBalance();
-          const b = balanceRef.current;
+          const b = await fetchBalance();
           const assetLines = b.assets
             .map((a) => `  ${a.symbol} on ${a.chain}: ${a.balance} (${formatUSD(a.balanceUSD)})`)
             .join("\n");
@@ -63,6 +133,20 @@ export function useChat() {
         }
 
         case "SEND": {
+          if (!intent.toAddress || !/^0x[a-fA-F0-9]{40}$/.test(intent.toAddress)) {
+            addMessage({
+              role: "assistant",
+              content: "Please provide a valid recipient address (0x...).\n\nExample: \"Send 100 USDC to 0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18\"",
+            });
+            break;
+          }
+          if (!intent.amount || intent.amount <= 0) {
+            addMessage({
+              role: "assistant",
+              content: "Please specify an amount to send.\n\nExample: \"Send 100 USDC to 0x742d...\"",
+            });
+            break;
+          }
           setPendingConfirmation(intent);
           addMessage({
             role: "assistant",
@@ -73,20 +157,36 @@ export function useChat() {
         }
 
         case "SWAP": {
+          if (!intent.amount || intent.amount <= 0) {
+            addMessage({
+              role: "assistant",
+              content: "Please specify an amount to swap.\n\nExample: \"Swap 50 USDC to ETH\"",
+            });
+            break;
+          }
+          if (!intent.toToken) {
+            addMessage({
+              role: "assistant",
+              content: "Please specify which token to swap to.\n\nExample: \"Swap 50 USDC to ETH\"",
+            });
+            break;
+          }
           setPendingConfirmation(intent);
           addMessage({
             role: "assistant",
-            content: `Swap ${intent.amount} ${intent.token || "USDC"} to ${intent.toToken}?\n\nCross-chain routing will find the best rate.\nPlease confirm to proceed.`,
+            content: `Swap ~$${intent.amount} worth of ${intent.token || "USDC"} to ${intent.toToken}?\n\nCross-chain routing will find the best rate.\nPlease confirm to proceed.`,
             intent,
           });
           break;
         }
 
         case "PAY": {
-          setPendingConfirmation(intent);
+          // Convert service payments to actionable options
+          const payAmount = intent.amount ? `${intent.amount} ` : "";
+          const payToken = intent.token || "USDC";
           addMessage({
             role: "assistant",
-            content: `Pay ${intent.serviceName}${intent.amount ? ` $${intent.amount}` : ""}?\n\nPlease confirm to proceed.`,
+            content: `To pay ${intent.serviceName}${intent.amount ? ` $${intent.amount}` : ""}, you can:\n\n1. **Send directly** — type "Send ${payAmount}${payToken} to 0x..." with the recipient address\n2. **Create a payment link** — type "Request $${intent.amount || "25"} for ${intent.serviceName}"`,
             intent,
           });
           break;
@@ -161,9 +261,12 @@ export function useChat() {
     });
 
     try {
-      if (intent.type === "SEND" || intent.type === "PAY") {
+      if (intent.type === "SEND") {
+        if (!intent.toAddress) {
+          throw new Error("No recipient address specified");
+        }
         const result = await sendTransaction(
-          intent.toAddress || "0x0000000000000000000000000000000000000000",
+          intent.toAddress,
           intent.amount || 0,
           intent.token || "USDC"
         );
@@ -177,9 +280,9 @@ export function useChat() {
             m.id === statusMsg.id
               ? {
                   ...m,
-                  content: `Transaction confirmed.${routeInfo}`,
+                  content: `Transaction submitted.${routeInfo}`,
                   txStatus: {
-                    state: "confirmed",
+                    state: "confirming",
                     txHash: result.txId,
                     chain: result.settlementChain,
                     sourceChains: result.sourceChains,
@@ -189,6 +292,21 @@ export function useChat() {
               : m
           )
         );
+
+        pollConfirmation(result.txId, statusMsg.id);
+
+        if (user.address) {
+          recordTransaction({
+            userAddress: user.address,
+            type: "send",
+            amount: intent.amount,
+            token: intent.token || "USDC",
+            toAddress: intent.toAddress,
+            sourceChains: result.sourceChains,
+            settlementChain: result.settlementChain,
+            particleTxId: result.txId,
+          });
+        }
       } else if (intent.type === "SWAP") {
         const result = await swapTokens(
           intent.amount || 0,
@@ -205,9 +323,9 @@ export function useChat() {
             m.id === statusMsg.id
               ? {
                   ...m,
-                  content: `Swap confirmed.${routeInfo}`,
+                  content: `Swap submitted.${routeInfo}`,
                   txStatus: {
-                    state: "confirmed",
+                    state: "confirming",
                     txHash: result.txId,
                     chain: result.settlementChain,
                     sourceChains: result.sourceChains,
@@ -217,6 +335,21 @@ export function useChat() {
               : m
           )
         );
+
+        pollConfirmation(result.txId, statusMsg.id);
+
+        if (user.address) {
+          recordTransaction({
+            userAddress: user.address,
+            type: "swap",
+            amount: intent.amount,
+            token: intent.token || "USDC",
+            toToken: intent.toToken,
+            sourceChains: result.sourceChains,
+            settlementChain: result.settlementChain,
+            particleTxId: result.txId,
+          });
+        }
       } else if (intent.type === "MOVE") {
         const result = await moveToLowestFee();
 
@@ -241,9 +374,9 @@ export function useChat() {
             m.id === statusMsg.id
               ? {
                   ...m,
-                  content: `Funds consolidated to ${result.chain}.`,
+                  content: `Funds consolidating to ${result.chain}...`,
                   txStatus: {
-                    state: "confirmed",
+                    state: "confirming",
                     txHash: result.txId,
                     chain: result.chain,
                     settlementChain: result.chain,
@@ -252,6 +385,17 @@ export function useChat() {
               : m
           )
         );
+
+        pollConfirmation(result.txId, statusMsg.id);
+
+        if (user.address) {
+          recordTransaction({
+            userAddress: user.address,
+            type: "move",
+            settlementChain: result.chain,
+            particleTxId: result.txId,
+          });
+        }
       } else {
         return;
       }
@@ -263,7 +407,7 @@ export function useChat() {
           m.id === statusMsg.id
             ? {
                 ...m,
-                content: "Transaction failed.",
+                content: `Transaction failed: ${error instanceof Error ? error.message : "Unknown error"}`,
                 txStatus: {
                   state: "failed",
                   error: error instanceof Error ? error.message : "Unknown error",
@@ -273,7 +417,7 @@ export function useChat() {
         )
       );
     }
-  }, [pendingConfirmation, addMessage, sendTransaction, swapTokens, moveToLowestFee, fetchBalance]);
+  }, [pendingConfirmation, addMessage, sendTransaction, swapTokens, moveToLowestFee, fetchBalance, pollConfirmation, user.address]);
 
   const cancelTransaction = useCallback(() => {
     setPendingConfirmation(null);

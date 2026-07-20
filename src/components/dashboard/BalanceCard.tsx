@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { formatUSD } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, ShieldCheck, RefreshCw } from "lucide-react";
 import { useState } from "react";
 
 interface BalanceCardProps {
@@ -13,7 +13,7 @@ interface BalanceCardProps {
   isDelegated?: boolean;
 }
 
-export function BalanceCard({ totalUSD, isLoading, isDelegated }: BalanceCardProps) {
+export function BalanceCard({ totalUSD, isLoading, onRefresh, isDelegated }: BalanceCardProps) {
   const [hidden, setHidden] = useState(false);
 
   return (
@@ -33,12 +33,22 @@ export function BalanceCard({ totalUSD, isLoading, isDelegated }: BalanceCardPro
             </span>
           )}
         </div>
-        <button
-          onClick={() => setHidden(!hidden)}
-          className="p-1 text-slate-400 hover:text-slate-200 transition-colors"
-        >
-          {hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onRefresh}
+            disabled={isLoading}
+            className="p-1 text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50"
+            aria-label="Refresh balance"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+          </button>
+          <button
+            onClick={() => setHidden(!hidden)}
+            className="p-1 text-slate-400 hover:text-slate-200 transition-colors"
+          >
+            {hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -54,17 +64,9 @@ export function BalanceCard({ totalUSD, isLoading, isDelegated }: BalanceCardPro
         </motion.h2>
       )}
 
-      <div className="flex items-center gap-2 mt-3">
-        <p className="text-[13px] text-slate-500">
-          Unified across all chains
-        </p>
-        {isDelegated && (
-          <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">
-            <ShieldCheck className="w-3 h-3" />
-            EIP-7702
-          </span>
-        )}
-      </div>
+      <p className="text-[13px] text-slate-500 mt-3">
+        Unified across all chains
+      </p>
     </motion.div>
   );
 }

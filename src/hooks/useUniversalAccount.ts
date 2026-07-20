@@ -5,24 +5,17 @@ import { useAuth } from "@/context/AuthContext";
 import type { UnifiedBalance, Asset } from "@/types";
 import { getUA } from "@/lib/particle";
 import { getMagicProvider, signAuthorization } from "@/lib/eip7702";
+import { withRetry, shouldRetryBlockchainOp } from "@/lib/retry";
+import { getChainNames, getSupportedChainIds, getDefaultChain } from "@/lib/chains";
+import { getTokenAddress } from "@/lib/tokens";
 import type {
   IAsset,
   ITransaction,
 } from "@particle-network/universal-account-sdk";
 
-const CHAIN_NAMES: Record<number, string> = {
-  421614: "Arbitrum Sepolia",
-  11155111: "Ethereum Sepolia",
-  84532: "Base Sepolia",
-  1: "Ethereum",
-  42161: "Arbitrum One",
-  8453: "Base",
-  10: "Optimism",
-  137: "Polygon",
-  56: "BNB Chain",
-};
-
-const SUPPORTED_CHAINS = [421614, 11155111, 84532];
+const CHAIN_NAMES = getChainNames();
+const SUPPORTED_CHAINS = getSupportedChainIds();
+const DEFAULT_CHAIN_ID = getDefaultChain().id;
 
 export interface DelegationStatus {
   isDelegated: boolean;
@@ -66,7 +59,7 @@ async function signTransaction(
     if (op.eip7702Auth && !op.eip7702Delegated) {
       try {
         const authResult = await signAuthorization({
-          chainId: op.eip7702Auth.chainId ?? 421614,
+          chainId: op.eip7702Auth.chainId ?? DEFAULT_CHAIN_ID,
           contractAddress: op.eip7702Auth.address ?? op.userOp.sender,
         });
         authorizations.push({
@@ -125,34 +118,31 @@ export function useUniversalAccount() {
         }
         setDelegationStatus({ isDelegated: true, chains });
       }
-    } catch {
-      // Assume delegated if check fails (EIP-7702 is enabled in config)
-      const chains: Record<number, boolean> = {};
-      for (const chainId of SUPPORTED_CHAINS) {
-        chains[chainId] = true;
-      }
-      setDelegationStatus({ isDelegated: true, chains });
+    } catch (err) {
+      console.warn("EIP-7702 delegation check failed:", err);
+      // Don't assume delegation status on error — leave as unknown/false
+      // so users can retry the upgrade if needed
     }
   }, [user.address]);
 
-  const fetchBalance = useCallback(async () => {
-    if (!user.address) return;
+  const fetchBalance = useCallback(async (): Promise<UnifiedBalance> => {
+    if (!user.address) return { totalUSD: 0, assets: [] };
 
     setIsLoading(true);
     try {
       const ua = getUA(user.address);
-      const response = await ua.getPrimaryAssets();
+      const response = await withRetry(() => ua.getPrimaryAssets(), {
+        shouldRetry: shouldRetryBlockchainOp,
+      });
       const assets = mapAssets(response.assets);
-      setBalance({
-        totalUSD: response.totalAmountInUSD,
-        assets,
-      });
+      const result = { totalUSD: response.totalAmountInUSD, assets };
+      setBalance(result);
+      return result;
     } catch (error) {
-      console.error("Failed to fetch balance (using preview data):", error);
-      setBalance({
-        totalUSD: 0,
-        assets: [],
-      });
+      console.error("Failed to fetch balance:", error);
+      const empty = { totalUSD: 0, assets: [] };
+      setBalance(empty);
+      return empty;
     } finally {
       setIsLoading(false);
     }
@@ -172,6 +162,8 @@ export function useUniversalAccount() {
   const sendTransaction = useCallback(
     async (to: string, amount: number, tokenSymbol: string): Promise<SendTransactionResult> => {
       if (!user.address) throw new Error("Not logged in");
+      if (!amount || amount <= 0) throw new Error("Amount must be greater than 0");
+      if (!to || !/^0x[a-fA-F0-9]{40}$/.test(to)) throw new Error("Invalid recipient address");
 
       const ua = getUA(user.address);
 
@@ -180,13 +172,16 @@ export function useUniversalAccount() {
       );
 
       const tokenAddress = asset?.address ?? "0x0000000000000000000000000000000000000000";
-      const chainId = asset?.chainId ?? 421614;
+      const chainId = asset?.chainId ?? DEFAULT_CHAIN_ID;
 
-      const transaction: ITransaction = await ua.createTransferTransaction({
-        token: { chainId, address: tokenAddress },
-        amount: amount.toString(),
-        receiver: to,
-      });
+      const transaction: ITransaction = await withRetry(
+        () => ua.createTransferTransaction({
+          token: { chainId, address: tokenAddress },
+          amount: amount.toString(),
+          receiver: to,
+        }),
+        { shouldRetry: shouldRetryBlockchainOp }
+      );
 
       // Extract chain routing info from userOps
       const sourceChains = [...new Set(
@@ -209,20 +204,23 @@ export function useUniversalAccount() {
   const swapTokens = useCallback(
     async (amountUSD: number, _fromToken: string, toTokenSymbol: string): Promise<SendTransactionResult> => {
       if (!user.address) throw new Error("Not logged in");
+      if (!amountUSD || amountUSD <= 0) throw new Error("Amount must be greater than 0");
 
       const ua = getUA(user.address);
 
-      const tokenMap: Record<string, { chainId: number; address: string }> = {
-        ETH: { chainId: 421614, address: "0x0000000000000000000000000000000000000000" },
-        USDC: { chainId: 421614, address: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d" },
-      };
+      const defaultChainId = SUPPORTED_CHAINS[0];
+      const tokenAddress = getTokenAddress(toTokenSymbol, defaultChainId)
+        ?? "0x0000000000000000000000000000000000000000";
 
-      const target = tokenMap[toTokenSymbol.toUpperCase()] ?? tokenMap.ETH;
+      const target = { chainId: defaultChainId, address: tokenAddress };
 
-      const transaction: ITransaction = await ua.createBuyTransaction({
-        token: { chainId: target.chainId, address: target.address },
-        amountInUSD: amountUSD.toString(),
-      });
+      const transaction: ITransaction = await withRetry(
+        () => ua.createBuyTransaction({
+          token: { chainId: target.chainId, address: target.address },
+          amountInUSD: amountUSD.toString(),
+        }),
+        { shouldRetry: shouldRetryBlockchainOp }
+      );
 
       const sourceChains = [...new Set(
         transaction.userOps.map(op => CHAIN_NAMES[op.chainId] ?? "Unknown")
@@ -255,11 +253,12 @@ export function useUniversalAccount() {
       chainTotals[a.chainId].total += a.balanceUSD;
     }
 
-    let bestChainId = 421614;
-    let bestName = "Arbitrum Sepolia";
+    let bestChainId = DEFAULT_CHAIN_ID;
+    let bestName = CHAIN_NAMES[DEFAULT_CHAIN_ID] ?? "Unknown";
     let bestTotal = 0;
 
-    const l2Preference = [421614, 84532];
+    // Prefer L2 chains (first two supported chains, typically Arbitrum and Base)
+    const l2Preference = SUPPORTED_CHAINS.filter((id) => id !== 1 && id !== 11155111);
     for (const chainId of l2Preference) {
       if (chainTotals[chainId] && chainTotals[chainId].total > bestTotal) {
         bestChainId = chainId;
@@ -270,9 +269,8 @@ export function useUniversalAccount() {
 
     const targetToken = {
       chainId: bestChainId,
-      address: bestChainId === 421614
-        ? "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d"
-        : "0x0000000000000000000000000000000000000000",
+      address: getTokenAddress("USDC", bestChainId)
+        ?? "0x0000000000000000000000000000000000000000",
     };
 
     const otherChainValue = assets
@@ -283,10 +281,13 @@ export function useUniversalAccount() {
       return { chain: bestName, txId: "no-op" };
     }
 
-    const transaction: ITransaction = await ua.createBuyTransaction({
-      token: targetToken,
-      amountInUSD: otherChainValue.toFixed(2),
-    });
+    const transaction: ITransaction = await withRetry(
+      () => ua.createBuyTransaction({
+        token: targetToken,
+        amountInUSD: otherChainValue.toFixed(2),
+      }),
+      { shouldRetry: shouldRetryBlockchainOp }
+    );
 
     const { signature, authorizations } = await signTransaction(transaction);
     const result = await ua.sendTransaction(transaction, signature, authorizations);

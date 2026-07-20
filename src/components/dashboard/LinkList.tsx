@@ -12,18 +12,22 @@ export function LinkList() {
   const { user } = useAuth();
   const [links, setLinks] = useState<PaymentLink[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
 
   useEffect(() => {
     async function fetchLinks() {
       if (!user.address) return;
+      setFetchError(false);
       try {
         const res = await fetch(`/api/links?address=${user.address}`);
         if (res.ok) {
           const data = await res.json();
-          setLinks(data);
+          setLinks(data.items ?? data);
+        } else {
+          setFetchError(true);
         }
       } catch {
-        // Silently fail
+        setFetchError(true);
       } finally {
         setLoading(false);
       }
@@ -37,6 +41,23 @@ export function LinkList() {
         {[1, 2, 3].map((i) => (
           <div key={i} className="h-20 rounded-2xl bg-white border border-slate-100 animate-pulse" />
         ))}
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mb-4">
+          <Link2 className="w-6 h-6 text-red-400" />
+        </div>
+        <p className="text-sm font-medium text-slate-600 mb-1">Failed to load links</p>
+        <button
+          onClick={() => { setLoading(true); setFetchError(false); }}
+          className="text-xs text-indigo-600 hover:text-indigo-700 mt-1"
+        >
+          Tap to retry
+        </button>
       </div>
     );
   }

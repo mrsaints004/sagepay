@@ -16,7 +16,7 @@ interface PaymentPageProps {
 
 export function PaymentPage({ linkId }: PaymentPageProps) {
   const { user, login } = useAuth();
-  const { balance, sendTransaction } = useUniversalAccount();
+  const { balance, isLoading: balanceLoading, fetchBalance, sendTransaction } = useUniversalAccount();
   const [link, setLink] = useState<PaymentLink | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +25,12 @@ export function PaymentPage({ linkId }: PaymentPageProps) {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [paidChain, setPaidChain] = useState<string | null>(null);
   const [emailInput, setEmailInput] = useState("");
+
+  useEffect(() => {
+    if (user.isLoggedIn && user.address) {
+      fetchBalance();
+    }
+  }, [user.isLoggedIn, user.address, fetchBalance]);
 
   useEffect(() => {
     async function fetchLink() {
@@ -205,13 +211,18 @@ export function PaymentPage({ linkId }: PaymentPageProps) {
 
               <button
                 onClick={handlePay}
-                disabled={paying || balance.totalUSD < link.amount}
+                disabled={paying || balanceLoading || balance.totalUSD < link.amount}
                 className="w-full h-12 rounded-2xl bg-emerald-500 text-white text-sm font-medium hover:bg-emerald-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {paying ? (
                   <>
                     <LoadingSpinner />
                     <span>Processing...</span>
+                  </>
+                ) : balanceLoading ? (
+                  <>
+                    <LoadingSpinner />
+                    <span>Loading balance...</span>
                   </>
                 ) : balance.totalUSD < link.amount ? (
                   "Insufficient balance"

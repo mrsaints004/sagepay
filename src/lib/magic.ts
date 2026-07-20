@@ -2,6 +2,8 @@
 
 import { Magic } from "magic-sdk";
 import { OAuthExtension } from "@magic-ext/oauth2";
+import { clientEnv } from "./env";
+import { getDefaultChain } from "./chains";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let magicInstance: any = null;
@@ -12,13 +14,11 @@ export function getMagic(): Magic & { oauth2: OAuthExtension } {
   }
 
   if (!magicInstance) {
-    const key = process.env.NEXT_PUBLIC_MAGIC_API_KEY;
-    if (!key) throw new Error("NEXT_PUBLIC_MAGIC_API_KEY is not set");
-
-    magicInstance = new Magic(key, {
+    const defaultChain = getDefaultChain();
+    magicInstance = new Magic(clientEnv.NEXT_PUBLIC_MAGIC_API_KEY, {
       network: {
-        rpcUrl: "https://sepolia-rollup.arbitrum.io/rpc",
-        chainId: 421614,
+        rpcUrl: defaultChain.rpcUrl,
+        chainId: defaultChain.id,
       },
       extensions: [new OAuthExtension()],
     });

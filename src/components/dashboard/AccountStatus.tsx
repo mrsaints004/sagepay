@@ -5,12 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Shield, ShieldCheck, ChevronDown, ChevronUp } from "lucide-react";
 import type { DelegationStatus } from "@/hooks/useUniversalAccount";
 import { signAuthorization } from "@/lib/eip7702";
+import { getChainNames } from "@/lib/chains";
 
-const CHAIN_NAMES: Record<number, string> = {
-  421614: "Arbitrum Sepolia",
-  11155111: "Ethereum Sepolia",
-  84532: "Base Sepolia",
-};
+const CHAIN_NAMES = getChainNames();
 
 interface AccountStatusProps {
   delegationStatus: DelegationStatus;

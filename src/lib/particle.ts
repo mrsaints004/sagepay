@@ -2,34 +2,25 @@
 
 import {
   UniversalAccount,
+  UNIVERSAL_ACCOUNT_VERSION,
   type IUniversalAccountConfig,
 } from "@particle-network/universal-account-sdk";
+import { clientEnv } from "./env";
 
 let uaInstance: UniversalAccount | null = null;
 let currentOwner: string | null = null;
 
 export function getUA(ownerAddress: string): UniversalAccount {
-  // Re-create if owner changed (new login)
   if (uaInstance && currentOwner === ownerAddress) return uaInstance;
 
-  const projectId = process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID;
-  const clientKey = process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY;
-  const appUuid = process.env.NEXT_PUBLIC_PARTICLE_APP_UUID;
-
-  if (!projectId || !clientKey || !appUuid) {
-    throw new Error(
-      "Missing Particle Network credentials. Set NEXT_PUBLIC_PARTICLE_PROJECT_ID, NEXT_PUBLIC_PARTICLE_CLIENT_KEY, and NEXT_PUBLIC_PARTICLE_APP_UUID."
-    );
-  }
-
   const config: IUniversalAccountConfig = {
-    projectId,
-    projectClientKey: clientKey,
-    projectAppUuid: appUuid,
+    projectId: clientEnv.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
+    projectClientKey: clientEnv.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
+    projectAppUuid: clientEnv.NEXT_PUBLIC_PARTICLE_APP_UUID,
     ownerAddress,
     smartAccountOptions: {
-      name: "SIMPLE",
-      version: "2.0.0",
+      name: "UNIVERSAL",
+      version: UNIVERSAL_ACCOUNT_VERSION,
       ownerAddress,
       useEIP7702: true,
     },

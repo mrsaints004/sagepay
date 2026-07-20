@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
+import * as Sentry from "@sentry/nextjs";
 import type { UserState } from "@/types";
 
 interface AuthContextValue {
@@ -46,6 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const metadata = await magic.user.getInfo();
             const accounts = (await magic.rpcProvider.request({ method: "eth_accounts" })) as string[];
             if (accounts[0]) {
+              Sentry.setUser({ id: accounts[0], email: metadata.email ?? undefined });
               setUser({
                 address: accounts[0],
                 isLoggedIn: true,
@@ -67,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser((prev) => ({ ...prev, isLoading: false }));
       }
     })();
-  }); // no deps — runs once via ref guard
+  }, []);
 
   const login = useCallback(async (method: "google" | "email", email?: string) => {
     setUser((prev) => ({ ...prev, isLoading: true }));
@@ -88,6 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await magic.auth.loginWithEmailOTP({ email });
         const metadata = await magic.user.getInfo();
         const accounts = (await magic.rpcProvider.request({ method: "eth_accounts" })) as string[];
+        Sentry.setUser({ id: accounts[0] ?? undefined, email: metadata.email ?? undefined });
         setUser({
           address: accounts[0] ?? null,
           isLoggedIn: true,
@@ -96,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       }
     } catch (error) {
-      console.error("Login failed:", error);
+      Sentry.captureException(error, { tags: { action: "login", method } });
       setUser((prev) => ({ ...prev, isLoading: false }));
     }
   }, []);
@@ -109,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Ignore logout errors
     }
+    Sentry.setUser(null);
     setUser({ address: null, isLoggedIn: false, isLoading: false });
   }, []);
 
